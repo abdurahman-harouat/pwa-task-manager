@@ -2,6 +2,8 @@ const path = require("path");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 const WorkboxPlugin = require("workbox-webpack-plugin");
 
+const CopyPlugin = require("copy-webpack-plugin");
+
 module.exports = {
   entry: "./src/index.js",
   output: {
@@ -28,6 +30,12 @@ module.exports = {
     ],
   },
   plugins: [
+    new CopyPlugin({
+      patterns: [
+        { from: "public/manifest.json", to: "." },
+        { from: "public/icons", to: "icons" },
+      ],
+    }),
     new HtmlWebpackPlugin({
       template: "./public/index.html",
       favicon: "./public/icons/icon-192x192.png",

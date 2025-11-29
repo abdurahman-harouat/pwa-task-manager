@@ -8,6 +8,10 @@
     <title>إدارة المهام | Task Manager</title>
     <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="المهام" />
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -65,10 +69,12 @@
             },
           },
         },
-      }
+      };
     </script>
   </head>
-  <body class="min-h-screen bg-background text-foreground font-sans antialiased">
+  <body
+    class="min-h-screen bg-background text-foreground font-sans antialiased"
+  >
     <div id="root"></div>
 
     <script>
