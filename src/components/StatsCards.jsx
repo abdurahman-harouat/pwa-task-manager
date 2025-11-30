@@ -1,32 +1,30 @@
 import React from "react";
-import { AlertCircle, Check, Zap, ArrowUp } from "lucide-react";
-import { Card, CardContent } from "./ui/Card";
+import { AlertCircle, CheckCircle2, Clock, Flame } from "lucide-react";
 import { cn } from "../lib/utils";
 
 export const StatsCards = ({ stats }) => {
   const statsList = [
-    { label: "الإجمالي", value: stats.total, icon: AlertCircle, color: "from-blue-500 to-blue-600" },
-    { label: "المكتملة", value: stats.completed, icon: Check, color: "from-green-500 to-green-600" },
-    { label: "قيد التنفيذ", value: stats.inProgress, icon: Zap, color: "from-amber-500 to-amber-600" },
-    { label: "الأولوية العالية", value: stats.high, icon: ArrowUp, color: "from-red-500 to-red-600" },
+    { label: "الإجمالي", value: stats.total, icon: AlertCircle, color: "text-blue-500", bg: "bg-blue-500/10" },
+    { label: "المكتملة", value: stats.completed, icon: CheckCircle2, color: "text-green-500", bg: "bg-green-500/10" },
+    { label: "قيد التنفيذ", value: stats.inProgress, icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10" },
+    { label: "أولوية عالية", value: stats.high, icon: Flame, color: "text-red-500", bg: "bg-red-500/10" },
   ];
 
   return (
-    <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4 flex-1">
+    <div className="mb-6 flex w-full gap-3 overflow-x-auto pb-2 scrollbar-hide">
       {statsList.map((stat, idx) => (
-        <Card key={idx} className="relative overflow-hidden">
-          <CardContent className="pt-6">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">{stat.label}</p>
-                <p className="mt-2 text-3xl font-bold text-foreground">{stat.value}</p>
-              </div>
-              <div className={cn("rounded-lg bg-gradient-to-br p-2.5", stat.color)}>
-                <stat.icon size={20} className="text-white" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <div 
+          key={idx} 
+          className="flex min-w-[140px] flex-1 items-center justify-between rounded-xl border border-border/50 bg-card/50 p-3 shadow-sm backdrop-blur-sm"
+        >
+          <div className="flex flex-col">
+            <span className="text-xs text-muted-foreground font-medium">{stat.label}</span>
+            <span className="text-xl font-bold text-foreground">{stat.value}</span>
+          </div>
+          <div className={cn("rounded-full p-2", stat.bg)}>
+            <stat.icon size={18} className={stat.color} />
+          </div>
+        </div>
       ))}
     </div>
   );

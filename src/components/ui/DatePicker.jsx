@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { DayPicker } from "react-day-picker";
 import { format } from "date-fns";
 import { ar } from "date-fns/locale";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./Popover";
 import { Button } from "./Button";
 import { cn } from "../../lib/utils";
@@ -37,11 +37,16 @@ const DatePicker = ({ value, onChange, className }) => {
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         <DayPicker
+        dir="rtl"
           mode="single"
           selected={date}
           onSelect={handleSelect}
           locale={ar}
           disabled={(date) => date > new Date()}
+          components={{
+            IconLeft: () => <ChevronLeft className="h-4 w-4" />,
+            IconRight: () => <ChevronRight className="h-4 w-4" />
+          }}
         />
       </PopoverContent>
     </Popover>
