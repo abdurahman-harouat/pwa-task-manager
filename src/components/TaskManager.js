@@ -1,163 +1,98 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useReducer } from "react";
+import { taskReducer } from "../store/taskReducer";
+import { STATUS_OPTIONS, PRIORITY_OPTIONS } from "../constants/taskConstants";
+import { getTaskStats, getCompletionRate, getTasksByStatus } from "../lib/taskUtils";
+import { TaskHeader } from "./TaskHeader";
+import { StatsCards } from "./StatsCards";
+import { TaskFilters } from "./TaskFilters";
+import { KanbanBoard } from "./KanbanBoard";
 import {
-  Trash2,
-  Plus,
-  GripVertical,
-  Check,
-  Circle,
-  X,
-  AlertTriangle,
-  ChevronDown,
-} from "lucide-react";
-
-// Custom Shadcn-style Select Component
-const CustomSelect = ({ value, onChange, options }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const selectRef = useRef(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (selectRef.current && !selectRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const selectedOption = options.find((opt) => opt.value === value);
-
-  return (
-    <div className="relative" ref={selectRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full md:w-48 flex items-center justify-between px-4 py-3 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-      >
-        <span className="truncate">
-          {selectedOption ? selectedOption.label : "اختر..."}
-        </span>
-        <ChevronDown size={16} className="opacity-50" />
-      </button>
-
-      {isOpen && (
-        <div className="absolute top-full left-0 w-full mt-1 bg-popover border border-border rounded-lg shadow-md z-50 overflow-hidden">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => {
-                onChange(option.value);
-                setIsOpen(false);
-              }}
-              className={`w-full text-right px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors ${
-                value === option.value
-                  ? "bg-accent text-accent-foreground font-medium"
-                  : "text-popover-foreground"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Confirmation Dialog Component
-const ConfirmationDialog = ({ isOpen, onClose, onConfirm, title, message }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
-      <div className="w-full max-w-md p-6 bg-card border border-border rounded-xl shadow-lg mx-4 animate-in fade-in zoom-in duration-200">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <AlertTriangle className="text-destructive" size={20} />
-              {title}
-            </h3>
-            <p className="text-muted-foreground text-sm">{message}</p>
-          </div>
-
-          <div className="flex justify-end gap-3 mt-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 transition-colors text-sm font-medium"
-            >
-              إلغاء
-            </button>
-            <button
-              onClick={onConfirm}
-              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors text-sm font-medium"
-            >
-              حذف
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// Redux-like state management using useReducer
-const taskReducer = (state, action) => {
-  switch (action.type) {
-    case "LOAD_TASKS":
-      return action.payload;
-    case "ADD_TASK":
-      return [...state, action.payload];
-    case "TOGGLE_TASK":
-      return state.map((task) =>
-        task.id === action.payload
-          ? {
-              ...task,
-              completed: !task.completed,
-              completedAt: task.completed ? null : new Date().toISOString(),
-            }
-          : task
-      );
-    case "DELETE_TASK":
-      return state.filter((task) => task.id !== action.payload);
-    case "MOVE_TASK":
-      const { taskId, newStatus } = action.payload;
-      return state.map((task) =>
-        task.id === taskId ? { ...task, status: newStatus } : task
-      );
-    default:
-      return state;
-  }
-};
+  AddTaskButton,
+  AddTaskDialog,
+  EditTaskDialog,
+  DeleteConfirmDialog,
+  EmptyState,
+} from "./TaskDialogs";
 
 const TaskManager = () => {
-  const [tasks, dispatch] = React.useReducer(taskReducer, []);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskStatus, setNewTaskStatus] = useState("todo");
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [draggedTask, setDraggedTask] = useState(null);
+  const [tasks, dispatch] = useReducer(taskReducer, []);
   
-  // Delete Modal State
+  // Add Task State
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [addTitle, setAddTitle] = useState("");
+  const [addDescription, setAddDescription] = useState("");
+  const [addStatus, setAddStatus] = useState("todo");
+  const [addPriority, setAddPriority] = useState("medium");
+  const [addDate, setAddDate] = useState("");
+  
+  // Tags State
+  const [tags, setTags] = useState([]);
+  const [selectedTag, setSelectedTag] = useState("");
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  
+  // Edit Task State
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editStatus, setEditStatus] = useState("todo");
+  const [editPriority, setEditPriority] = useState("medium");
+  const [editDate, setEditDate] = useState("");
+  const [editTag, setEditTag] = useState("");
+  
+  // Delete State
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
-
-  const statusOptions = [
-    { value: "todo", label: "قائمة المهام" },
-    { value: "in-progress", label: "قيد التنفيذ" },
-    { value: "done", label: "مكتمل" },
-  ];
+  
+  // Filter & Sort State
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [filterPriority, setFilterPriority] = useState("all");
+  const [sortBy, setSortBy] = useState("created");
+  
+  // Drag & Drop State
+  const [draggedTask, setDraggedTask] = useState(null);
+  
+  // Online Status
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Load tasks from storage
   useEffect(() => {
     const stored = localStorage.getItem("pwa_tasks");
     if (stored) {
-      dispatch({ type: "LOAD_TASKS", payload: JSON.parse(stored) });
+      try {
+        dispatch({ type: "LOAD_TASKS", payload: JSON.parse(stored) });
+      } catch (e) {
+        console.error("Failed to load tasks:", e);
+      }
+    }
+  }, []);
+
+  // Load tags from storage
+  useEffect(() => {
+    const stored = localStorage.getItem("pwa_tags");
+    if (stored) {
+      try {
+        setTags(JSON.parse(stored));
+      } catch (e) {
+        console.error("Failed to load tags:", e);
+      }
     }
   }, []);
 
   // Save tasks to storage
   useEffect(() => {
-    localStorage.setItem("pwa_tasks", JSON.stringify(tasks));
+    if (tasks.length > 0) {
+      localStorage.setItem("pwa_tasks", JSON.stringify(tasks));
+    }
   }, [tasks]);
+
+  // Save tags to storage
+  useEffect(() => {
+    if (tags.length > 0) {
+      localStorage.setItem("pwa_tags", JSON.stringify(tags));
+    }
+  }, [tags]);
 
   // Online/Offline detection
   useEffect(() => {
@@ -173,27 +108,105 @@ const TaskManager = () => {
     };
   }, []);
 
+  // Add Task
   const addTask = (e) => {
-    e.preventDefault();
-    if (!newTaskTitle.trim()) return;
+    if (e && e.preventDefault) e.preventDefault();
+    if (!addTitle.trim()) return;
+
+    const tagValue = isCreatingTag && newTagName.trim() ? newTagName.trim() : selectedTag;
 
     const task = {
       id: Date.now() + Math.random(),
-      title: newTaskTitle,
-      status: newTaskStatus,
+      title: addTitle,
+      description: addDescription,
+      status: addStatus,
+      priority: addPriority,
+      tag: tagValue || null,
+      dueDate: addDate || null,
       completed: false,
       createdAt: new Date().toISOString(),
       completedAt: null,
     };
 
     dispatch({ type: "ADD_TASK", payload: task });
-    setNewTaskTitle("");
+
+    if (isCreatingTag && newTagName.trim()) {
+      const t = newTagName.trim();
+      const next = Array.from(new Set([t, ...tags]));
+      setTags(next);
+      localStorage.setItem("pwa_tags", JSON.stringify(next));
+    }
+
+    setAddTitle("");
+    setAddDescription("");
+    setAddStatus("todo");
+    setAddPriority("medium");
+    setAddDate("");
+    setSelectedTag("");
+    setIsCreatingTag(false);
+    setNewTagName("");
+    setIsAddDialogOpen(false);
   };
 
+  // Create Tag
+  const handleCreateTag = () => {
+    if (!newTagName.trim()) return;
+    const t = newTagName.trim();
+    const next = Array.from(new Set([t, ...tags]));
+    setTags(next);
+    localStorage.setItem("pwa_tags", JSON.stringify(next));
+    setIsCreatingTag(false);
+    setSelectedTag(t);
+    setNewTagName("");
+  };
+
+  // Toggle Task
   const toggleTask = (id) => {
     dispatch({ type: "TOGGLE_TASK", payload: id });
   };
 
+  // Edit Task
+  const handleEditClick = (task) => {
+    setEditingTask(task);
+    setEditTitle(task.title);
+    setEditDescription(task.description || "");
+    setEditStatus(task.status);
+    setEditPriority(task.priority);
+    setEditDate(task.dueDate || "");
+    setEditTag(task.tag || "");
+    setIsEditDialogOpen(true);
+  };
+
+  const saveEdit = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!editTitle.trim() || !editingTask) return;
+
+    dispatch({
+      type: "UPDATE_TASK",
+      payload: {
+        id: editingTask.id,
+        updates: {
+          title: editTitle,
+          description: editDescription,
+          status: editStatus,
+          priority: editPriority,
+          dueDate: editDate || null,
+          tag: editTag || null,
+        },
+      },
+    });
+
+    setIsEditDialogOpen(false);
+    setEditingTask(null);
+    setEditTitle("");
+    setEditDescription("");
+    setEditStatus("todo");
+    setEditPriority("medium");
+    setEditDate("");
+    setEditTag("");
+  };
+
+  // Delete Task
   const handleDeleteClick = (id) => {
     setTaskToDelete(id);
     setIsDeleteModalOpen(true);
@@ -207,6 +220,7 @@ const TaskManager = () => {
     }
   };
 
+  // Drag & Drop
   const handleDragStart = (task) => {
     setDraggedTask(task);
   };
@@ -225,190 +239,135 @@ const TaskManager = () => {
     setDraggedTask(null);
   };
 
-  const columns = [
-    { id: "todo", title: "قائمة المهام", color: "bg-blue-500" },
-    { id: "in-progress", title: "قيد التنفيذ", color: "bg-yellow-500" },
-    { id: "done", title: "مكتمل", color: "bg-green-500" },
-  ];
-
-  const getTasksByStatus = (status) => {
-    return tasks.filter((task) => task.status === status);
-  };
+  // Calculate stats
+  const stats = getTaskStats(tasks);
+  const completionRate = getCompletionRate(stats);
 
   return (
-    <div
-      dir="rtl"
-      className="min-h-screen bg-background text-foreground"
-    >
-      {/* Header */}
-      <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-sm">
-              <Check className="text-primary-foreground" size={24} />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">إدارة المهام</h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <div
-              className={`px-3 py-1 rounded-full text-sm font-medium border ${
-                isOnline
-                  ? "bg-green-500/10 text-green-600 border-green-200 dark:text-green-400 dark:border-green-800"
-                  : "bg-destructive/10 text-destructive border-destructive/20"
-              }`}
-            >
-              {isOnline ? "● متصل" : "● غير متصل"}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div dir="rtl" className="min-h-screen bg-background text-foreground">
+      <TaskHeader isOnline={isOnline} />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Add Task Form */}
-        <div className="mb-8 bg-card rounded-xl p-6 border border-border shadow-sm">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="text"
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addTask(e)}
-              placeholder="أدخل مهمة جديدة..."
-              className="flex-1 px-4 py-3 bg-background border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+      <div className="mx-auto max-w-7xl px-4 py-8">
+        <div className="flex items-start gap-6">
+          {/* Sidebar */}
+          <aside className="hidden lg:flex flex-col items-center gap-4 w-20 rounded-xl bg-muted/40 p-3">
+            <div className="w-full flex items-center justify-center py-2">
+              <button className="h-10 w-10 rounded-lg bg-white shadow-sm flex items-center justify-center">
+                ✓
+              </button>
+            </div>
+            <div className="flex-1 flex flex-col items-center gap-3 overflow-y-auto py-2">
+              <button className="h-10 w-10 rounded-lg bg-transparent text-muted-foreground hover:bg-muted/60 flex items-center justify-center">
+                ◎
+              </button>
+              <button className="h-10 w-10 rounded-lg bg-transparent text-muted-foreground hover:bg-muted/60 flex items-center justify-center">
+                ≡
+              </button>
+              <button className="h-10 w-10 rounded-lg bg-transparent text-muted-foreground hover:bg-muted/60 flex items-center justify-center">
+                ⚙
+              </button>
+            </div>
+            <div className="w-full flex items-center justify-center py-2">
+              <button className="h-10 w-10 rounded-lg bg-transparent text-muted-foreground hover:bg-muted/60 flex items-center justify-center">
+                +
+              </button>
+            </div>
+          </aside>
+
+          <div className="flex-1">
+            {/* Stats */}
+            <StatsCards stats={stats} />
+
+            {/* Add Task Button */}
+            <AddTaskButton onAdd={() => setIsAddDialogOpen(true)} />
+
+            {/* Filters */}
+            <TaskFilters
+              filterPriority={filterPriority}
+              setFilterPriority={setFilterPriority}
+              sortBy={sortBy}
+              setSortBy={setSortBy}
+              completionRate={completionRate}
+              showProgress={tasks.length > 0}
             />
-            <div className="w-full md:w-48">
-              <CustomSelect
-                value={newTaskStatus}
-                onChange={setNewTaskStatus}
-                options={statusOptions}
-              />
-            </div>
-            <button
-              onClick={addTask}
-              className="px-6 py-3 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-all flex items-center gap-2 shadow-sm"
-            >
-              <Plus size={20} />
-              إضافة مهمة
-            </button>
-          </div>
-        </div>
 
-        {/* Kanban Board */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {columns.map((column) => (
-            <div
-              key={column.id}
+            {/* Kanban Board */}
+            <KanbanBoard
+              tasks={tasks}
+              filterStatus={filterStatus}
+              filterPriority={filterPriority}
+              sortBy={sortBy}
+              draggedTask={draggedTask}
+              getTasksByStatus={getTasksByStatus}
+              onToggle={toggleTask}
+              onEdit={handleEditClick}
+              onDelete={handleDeleteClick}
+              onDragStart={handleDragStart}
               onDragOver={handleDragOver}
-              onDrop={() => handleDrop(column.id)}
-              className="bg-muted/50 rounded-xl p-4 border border-border min-h-96"
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <div className={`w-3 h-3 ${column.color} rounded-full`}></div>
-                <h2 className="text-lg font-semibold text-foreground">
-                  {column.title}
-                </h2>
-                <span className="mr-auto bg-background px-2 py-1 rounded-full text-xs text-muted-foreground border border-border shadow-sm">
-                  {getTasksByStatus(column.id).length}
-                </span>
-              </div>
+              onDrop={handleDrop}
+            />
 
-              <div className="space-y-3">
-                {getTasksByStatus(column.id).map((task) => (
-                  <div
-                    key={task.id}
-                    draggable
-                    onDragStart={() => handleDragStart(task)}
-                    className="group bg-card rounded-lg p-4 border border-border shadow-sm hover:shadow-md transition-all cursor-move"
-                  >
-                    <div className="flex items-start gap-3">
-                      <button
-                        onClick={() => toggleTask(task.id)}
-                        className="mt-1 flex-shrink-0"
-                      >
-                        {task.completed ? (
-                          <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                            <Check size={14} className="text-primary-foreground" />
-                          </div>
-                        ) : (
-                          <Circle
-                            size={20}
-                            className="text-muted-foreground hover:text-primary transition-colors"
-                          />
-                        )}
-                      </button>
+            {/* Empty State */}
+            {tasks.length === 0 && <EmptyState />}
 
-                      <div className="flex-1 min-w-0">
-                        <p
-                          className={`text-foreground font-medium ${
-                            task.completed ? "line-through text-muted-foreground" : ""
-                          }`}
-                        >
-                          {task.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {new Date(task.createdAt).toLocaleDateString("ar-DZ")}
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <GripVertical size={16} className="text-muted-foreground/50" />
-                        <button
-                          onClick={() => handleDeleteClick(task.id)}
-                          className="text-destructive/70 hover:text-destructive transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-
-                {getTasksByStatus(column.id).length === 0 && (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Circle size={32} className="mx-auto mb-2 opacity-20" />
-                    <p className="text-sm">لا توجد مهام بعد</p>
-                  </div>
-                )}
-              </div>
+            {/* PWA Install Hint */}
+            <div className="mt-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                💡 يمكنك تثبيت التطبيق للوصول إليه دون اتصال بالإنترنت
+              </p>
             </div>
-          ))}
-        </div>
-
-        {/* Stats */}
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
-            <p className="text-muted-foreground text-sm">إجمالي المهام</p>
-            <p className="text-3xl font-bold text-foreground mt-1">{tasks.length}</p>
           </div>
-          <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
-            <p className="text-muted-foreground text-sm">المكتملة</p>
-            <p className="text-3xl font-bold text-green-500 mt-1">
-              {tasks.filter((t) => t.completed).length}
-            </p>
-          </div>
-          <div className="bg-card rounded-xl p-6 border border-border shadow-sm">
-            <p className="text-muted-foreground text-sm">قيد التنفيذ</p>
-            <p className="text-3xl font-bold text-yellow-500 mt-1">
-              {
-                tasks.filter((t) => t.status === "in-progress" && !t.completed)
-                  .length
-              }
-            </p>
-          </div>
-        </div>
-
-        {/* PWA Install Prompt */}
-        <div className="mt-6 text-center text-muted-foreground text-sm">
-          <p>💡 قم بتثبيت التطبيق للوصول دون اتصال بالإنترنت</p>
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <ConfirmationDialog
+      {/* Dialogs */}
+      <AddTaskDialog
+        isOpen={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        onSubmit={addTask}
+        title={addTitle}
+        setTitle={setAddTitle}
+        description={addDescription}
+        setDescription={setAddDescription}
+        status={addStatus}
+        setStatus={setAddStatus}
+        priority={addPriority}
+        setPriority={setAddPriority}
+        date={addDate}
+        setDate={setAddDate}
+        tags={tags}
+        selectedTag={selectedTag}
+        setSelectedTag={setSelectedTag}
+        isCreatingTag={isCreatingTag}
+        setIsCreatingTag={setIsCreatingTag}
+        newTagName={newTagName}
+        setNewTagName={setNewTagName}
+        onCreateTag={handleCreateTag}
+      />
+
+      <EditTaskDialog
+        isOpen={isEditDialogOpen}
+        onClose={() => setIsEditDialogOpen(false)}
+        onSubmit={saveEdit}
+        title={editTitle}
+        setTitle={setEditTitle}
+        description={editDescription}
+        setDescription={setEditDescription}
+        status={editStatus}
+        setStatus={setEditStatus}
+        priority={editPriority}
+        setPriority={setEditPriority}
+        date={editDate}
+        setDate={setEditDate}
+        tags={tags}
+        tag={editTag}
+        setTag={setEditTag}
+      />
+
+      <DeleteConfirmDialog
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={confirmDelete}
-        title="حذف المهمة"
-        message="هل أنت متأكد أنك تريد حذف هذه المهمة؟ لا يمكن التراجع عن هذا الإجراء."
       />
     </div>
   );
